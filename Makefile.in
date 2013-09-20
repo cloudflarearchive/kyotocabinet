@@ -1063,8 +1063,8 @@ libkyotocabinet.dylib : libkyotocabinet.$(LIBVER).$(LIBREV).0.dylib
 	ln -f -s libkyotocabinet.$(LIBVER).$(LIBREV).0.dylib $@
 
 
-kcutiltest : kcutiltest.o $(LIBRARYFILES)
-	$(CXX) $(CXXFLAGS) -o $@ $< $(LDFLAGS) $(CMDLDFLAGS) -lkyotocabinet $(CMDLIBS)
+kcutiltest : kcutiltest.o kcutil.o $(LIBRARYFILES)
+	$(CXX) $(CXXFLAGS) -o $@ kcutil.o $< $(LDFLAGS) $(CMDLDFLAGS) -lkyotocabinet $(CMDLIBS)
 
 
 kcutilmgr : kcutilmgr.o $(LIBRARYFILES)
@@ -1247,6 +1247,8 @@ kclangctest.o : \
   kcplantdb.h kcprotodb.h kcstashdb.h kccachedb.h kchashdb.h kcdirdb.h kctextdb.h \
   kcpolydb.h kcdbext.h kclangc.h
 
+modp_b64.o : modp_b64/modp_b64.h modp_b64/modp_b64_data.h modp_b64/modp_stdint.h \
+  modp_b64/extern_c_begin.h modp_b64/extern_c_begin.h
 
 
 # END OF FILE
