@@ -15,6 +15,7 @@
 
 #include "kcutil.h"
 #include "myconf.h"
+#include "modp_b64.h"
 
 namespace kyotocabinet {                 // common namespace
 
@@ -381,6 +382,31 @@ void setstdiobin() {
 #else
   _assert_(true);
 #endif
+}
+
+
+/**
+ * Encode a serial object by Base64 encoding.
+ */
+char* baseencode(const void* buf, size_t size) {
+  _assert_(buf && size <= MEMMAXSIZ);
+  const char* rp = (const char*)buf;
+  char* zbuf = new char[size*4/3+5];
+  modp_b64_encode(zbuf, rp, size);
+  return zbuf;
+}
+
+
+/**
+ * Decode a string encoded by Base64 encoding.
+ */
+char* basedecode(const char* str, size_t* sp) {
+  _assert_(str && sp);
+  size_t len = std::strlen(str);
+  char* zbuf = new char[len+4];
+
+  *sp = modp_b64_decode(zbuf, str, len);
+  return (char*)zbuf;
 }
 
 
