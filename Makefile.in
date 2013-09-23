@@ -1247,8 +1247,7 @@ kclangctest.o : \
   kcplantdb.h kcprotodb.h kcstashdb.h kccachedb.h kchashdb.h kcdirdb.h kctextdb.h \
   kcpolydb.h kcdbext.h kclangc.h
 
-modp_b64.o : modp_b64/modp_b64.h modp_b64/modp_b64_data.h modp_b64/modp_stdint.h \
-  modp_b64/extern_c_begin.h modp_b64/extern_c_begin.h
+modp_b64.o : modp_b64.h modp_b64_data.h modp_stdint.h extern_c_begin.h extern_c_begin.h
 
 
 # END OF FILE
