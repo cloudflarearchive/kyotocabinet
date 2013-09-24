@@ -68,6 +68,8 @@ const uint32_t UINT32MAX = (std::numeric_limits<uint32_t>::max)();
 /** The maximum value of uint64_t. */
 const uint64_t UINT64MAX = (std::numeric_limits<uint64_t>::max)();
 
+/** The size of uint64_t. */
+const uint64_t UINT64LEN = sizeof(uint64_t);
 
 /** The maximum value of size_t. */
 const size_t SIZEMAX = (std::numeric_limits<size_t>::max)();
@@ -349,8 +351,19 @@ bool chkinf(double num);
  * @param format the printf-like format string.  The conversion character `%' can be used with
  * such flag characters as `s', `d', `o', `u', `x', `X', `c', `e', `E', `f', `g', `G', and `%'.
  * @param ap used according to the format string.
+ * NOTE: capped at 2K for performace enhancement
  */
 void vstrprintf(std::string* dest, const char* format, va_list ap);
+
+
+/**
+ * Append a formatted string at the end of a string.
+ * @param dest the destination string.
+ * @param format the printf-like format string.  The conversion character `%' can be used with
+ * such flag characters as `s', `d', `o', `u', `x', `X', `c', `e', `E', `f', `g', `G', and `%'.
+ * @param ap used according to the format string.
+ */
+void vstrprintf_unlimited(std::string* dest, const char* format, va_list ap);
 
 
 /**
@@ -1563,10 +1576,26 @@ inline bool chkinf(double num) {
 }
 
 
+#define MIN(a, b) (a > b ? b : a)
+#define MAX_LINE 2048
+
+
+/**
+ * Append a formatted string at the end of a string.
+ * NOTE: capped at 2K
+ */
+inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
+  _assert_(dest && format);
+  char tmp[MAX_LINE] = {0};
+  int len = vsnprintf(tmp, MAX_LINE, format, ap);
+  dest->append(tmp, MIN(len, MAX_LINE));
+}
+
+
 /**
  * Append a formatted string at the end of a string.
  */
-inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
+inline void vstrprintf_unlimited(std::string* dest, const char* format, va_list ap) {
   _assert_(dest && format);
   while (*format != '\0') {
     if (*format == '%') {
@@ -1596,11 +1625,11 @@ inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
           char tbuf[NUMBUFSIZ*4];
           size_t tsiz;
           if (lnum >= 2) {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, long long));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, long long));
           } else if (lnum >= 1) {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, long));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, long));
           } else {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, int));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, int));
           }
           dest->append(tbuf, tsiz);
           break;
@@ -1609,11 +1638,11 @@ inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
           char tbuf[NUMBUFSIZ*4];
           size_t tsiz;
           if (lnum >= 2) {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, unsigned long long));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, unsigned long long));
           } else if (lnum >= 1) {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, unsigned long));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, unsigned long));
           } else {
-            tsiz = std::sprintf(tbuf, cbuf, va_arg(ap, unsigned int));
+            tsiz = sprintf(tbuf, cbuf, va_arg(ap, unsigned int));
           }
           dest->append(tbuf, tsiz);
           break;
@@ -1622,9 +1651,9 @@ inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
           char tbuf[NUMBUFSIZ*4];
           size_t tsiz;
           if (lnum >= 1) {
-            tsiz = std::snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, long double));
+            tsiz = snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, long double));
           } else {
-            tsiz = std::snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, double));
+            tsiz = snprintf(tbuf, sizeof(tbuf), cbuf, va_arg(ap, double));
           }
           if (tsiz > sizeof(tbuf)) {
             tbuf[sizeof(tbuf)-1] = '*';
@@ -1635,7 +1664,7 @@ inline void vstrprintf(std::string* dest, const char* format, va_list ap) {
         }
         case 'p': {
           char tbuf[NUMBUFSIZ*4];
-          size_t tsiz = std::sprintf(tbuf, "%p", va_arg(ap, void*));
+          size_t tsiz = sprintf(tbuf, "%p", va_arg(ap, void*));
           dest->append(tbuf, tsiz);
           break;
         }
