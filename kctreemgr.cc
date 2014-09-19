@@ -14,6 +14,7 @@
 
 
 #include <kchashdb.h>
+#include <kccompress.h>
 #include "cmdcommon.h"
 
 
@@ -43,7 +44,7 @@ static int32_t rungetbulk(int argc, char** argv);
 static int32_t runcheck(int argc, char** argv);
 static int32_t proccreate(const char* path, int32_t oflags, int32_t apow, int32_t fpow,
                           int32_t opts, int64_t bnum, int32_t psiz, kc::Comparator* rcomp);
-static int32_t procinform(const char* path, int32_t oflags, bool st);
+static int32_t procinform(const char* path, int32_t oflags, bool st, bool zcomp);
 static int32_t procset(const char* path, const char* kbuf, size_t ksiz,
                        const char* vbuf, size_t vsiz, int32_t oflags, int32_t mode);
 static int32_t procremove(const char* path, const char* kbuf, size_t ksiz, int32_t oflags);
@@ -55,7 +56,8 @@ static int32_t procclear(const char* path, int32_t oflags);
 static int32_t procimport(const char* path, const char* file, int32_t oflags, bool sx);
 static int32_t proccopy(const char* path, const char* file, int32_t oflags);
 static int32_t procdump(const char* path, const char* file, int32_t oflags);
-static int32_t procload(const char* path, const char* file, int32_t oflags);
+static int32_t procload(const char* path, const char* file, int32_t oflags,
+                        bool zcomp);
 static int32_t procdefrag(const char* path, int32_t oflags);
 static int32_t procsetbulk(const char* path, int32_t oflags,
                            const std::map<std::string, std::string>& recs);
@@ -121,7 +123,7 @@ static void usage() {
   eprintf("usage:\n");
   eprintf("  %s create [-otr] [-onl|-otl|-onr] [-apow num] [-fpow num] [-ts] [-tl] [-tc]"
           " [-bnum num] [-psiz num] [-rcd|-rcld|-rcdd] path\n", g_progname);
-  eprintf("  %s inform [-onl|-otl|-onr] [-st] path\n", g_progname);
+  eprintf("  %s inform [-onl|-otl|-onr] [-st] [-lzo] path\n", g_progname);
   eprintf("  %s set [-onl|-otl|-onr] [-add|-rep|-app|-inci|-incd] [-sx] path key value\n",
           g_progname);
   eprintf("  %s remove [-onl|-otl|-onr] [-sx] path key\n", g_progname);
@@ -132,7 +134,7 @@ static void usage() {
   eprintf("  %s import [-onl|-otl|-onr] [-sx] path [file]\n", g_progname);
   eprintf("  %s copy [-onl|-otl|-onr] path file\n", g_progname);
   eprintf("  %s dump [-onl|-otl|-onr] path [file]\n", g_progname);
-  eprintf("  %s load [-otr] [-onl|-otl|-onr] path [file]\n", g_progname);
+  eprintf("  %s load [-otr] [-onl|-otl|-onr] [-lzo] path [file]\n", g_progname);
   eprintf("  %s defrag [-onl|-otl|-onr] path\n", g_progname);
   eprintf("  %s setbulk [-onl|-otl|-onr] [-sx] path key value ...\n", g_progname);
   eprintf("  %s removebulk [-onl|-otl|-onr] [-sx] path key ...\n", g_progname);
@@ -220,6 +222,7 @@ static int32_t runinform(int argc, char** argv) {
   const char* path = NULL;
   int32_t oflags = 0;
   bool st = false;
+  bool zcomp = false;
   for (int32_t i = 2; i < argc; i++) {
     if (!argbrk && argv[i][0] == '-') {
       if (!std::strcmp(argv[i], "--")) {
@@ -232,6 +235,8 @@ static int32_t runinform(int argc, char** argv) {
         oflags |= kc::TreeDB::ONOREPAIR;
       } else if (!std::strcmp(argv[i], "-st")) {
         st = true;
+      } else if (!std::strcmp(argv[i], "-lzo")) {
+        zcomp = true;
       } else {
         usage();
       }
@@ -243,7 +248,7 @@ static int32_t runinform(int argc, char** argv) {
     }
   }
   if (!path) usage();
-  int32_t rv = procinform(path, oflags, st);
+  int32_t rv = procinform(path, oflags, st, zcomp);
   return rv;
 }
 
@@ -628,6 +633,7 @@ static int32_t runload(int argc, char** argv) {
   const char* path = NULL;
   const char* file = NULL;
   int32_t oflags = 0;
+  bool zcomp = false;
   for (int32_t i = 2; i < argc; i++) {
     if (!argbrk && argv[i][0] == '-') {
       if (!std::strcmp(argv[i], "--")) {
@@ -640,6 +646,8 @@ static int32_t runload(int argc, char** argv) {
         oflags |= kc::TreeDB::OTRYLOCK;
       } else if (!std::strcmp(argv[i], "-onr")) {
         oflags |= kc::TreeDB::ONOREPAIR;
+      } else if (!std::strcmp(argv[i], "-lzo")) {
+        zcomp = true;
       } else {
         usage();
       }
@@ -653,7 +661,7 @@ static int32_t runload(int argc, char** argv) {
     }
   }
   if (!path) usage();
-  int32_t rv = procload(path, file, oflags);
+  int32_t rv = procload(path, file, oflags, zcomp);
   return rv;
 }
 
@@ -899,8 +907,14 @@ static int32_t proccreate(const char* path, int32_t oflags, int32_t apow, int32_
 
 
 // perform inform command
-static int32_t procinform(const char* path, int32_t oflags, bool st) {
+static int32_t procinform(const char* path, int32_t oflags, bool st,
+                          bool zcomp) {
   kc::TreeDB db;
+  if (zcomp) {
+    kyotocabinet::Compressor *zcomp_;
+    zcomp_ = new kyotocabinet::LZOCompressor<kyotocabinet::LZO::RAW>;
+    db.tune_compressor(zcomp_);
+  }
   db.tune_logger(stdlogger(g_progname, &std::cerr));
   if (!db.open(path, kc::TreeDB::OREADER | oflags)) {
     dberrprint(&db, "DB::open failed");
@@ -1375,8 +1389,14 @@ static int32_t procdump(const char* path, const char* file, int32_t oflags) {
 
 
 // perform load command
-static int32_t procload(const char* path, const char* file, int32_t oflags) {
+static int32_t procload(const char* path, const char* file, int32_t oflags,
+                        bool zcomp) {
   kc::TreeDB db;
+  if (zcomp) {
+    kyotocabinet::Compressor *zcomp_;
+    zcomp_ = new kyotocabinet::LZOCompressor<kyotocabinet::LZO::RAW>;
+    db.tune_compressor(zcomp_);
+  }
   db.tune_logger(stdlogger(g_progname, &std::cerr));
   if (!db.open(path, kc::TreeDB::OWRITER | kc::TreeDB::OCREATE | oflags)) {
     dberrprint(&db, "DB::open failed");
